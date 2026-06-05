@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Despensa Ramiro - Tu Almacén de Confianza</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <header>
+        <h1><i class="fa-solid fa-store"></i> Despensa Ramiro</h1>
+        <p>
+            <i class="fa-solid fa-motorcycle"></i> Te lo mandamos o 
+            <i class="fa-solid fa-shop"></i> Pasalo a retirar
+        </p>
+    </header>
+
+    <div class="container">
+        
+        <div class="features-grid">
+            <div class="feature-item">
+                <i class="fa-solid fa-people-roof"></i>
+                <h4>Atención Familiar</h4>
+                <p>Tus vecinos de Los Perales</p>
+            </div>
+            <div class="feature-item">
+                <i class="fa-brands fa-whatsapp"></i>
+                <h4>Pedidos Fáciles</h4>
+                <p>Armá tu carrito online</p>
+            </div>
+            <div class="feature-item">
+                <i class="fa-solid fa-clock"></i>
+                <h4>Rápido</h4>
+                <p>Preparación en minutos</p>
+            </div>
+        </div>
+
+        <div class="banner">
+            <h2>¡Pedidos Rápidos por WhatsApp!</h2>
+            <p>Elegí tus productos abajo, armá tu carrito y mandanos el pedido directo al celu.</p>
+        </div>
+
+        <h3 class="catalog-title"><i class="fa-solid fa-basket-shopping"></i> Nuestro Catálogo</h3>
+        <div class="grid-productos" id="contenedor-productos">
+            </div>
+
+        <div class="info-section">
+            <div class="info-box">
+                <h3><i class="fa-regular fa-clock"></i> Horarios</h3>
+                <p>Lunes a Sábados: 09:00 a 14:00 y 17:30 a 22:00</p>
+                <p>Domingos: 10:00 a 14:30</p>
+            </div>
+            <div class="info-box">
+                <h3><i class="fa-solid fa-location-dot"></i> Dónde estamos</h3>
+                <p>Barrio Los Perales, San Salvador de Jujuy</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="barra-pedido">
+        <div class="total-texto">
+            <i class="fa-solid fa-cart-shopping"></i> Total Estimado:<br>
+            <span id="total-precio">ARS $0.00</span>
+        </div>
+        <a href="#" class="btn-whatsapp" id="btn-enviar-pedido" onclick="enviarPedido(event)">
+            <i class="fa-brands fa-whatsapp fa-lg"></i> Pedir por WhatsApp
+        </a>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
