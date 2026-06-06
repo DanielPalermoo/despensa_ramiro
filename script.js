@@ -140,13 +140,11 @@ function agregarAlCarrito(event, id) {
     const producto = productos.find(p => p.id == id);
     if (!producto || producto.stock <= 0) return;
 
+    // Descontar stock inmediatamente
+    producto.stock -= 1;
+
     if (carrito[id]) {
-        if (carrito[id].cantidad < producto.stock) {
-            carrito[id].cantidad += 1;
-        } else {
-            mostrarAlerta("Has alcanzado el límite de stock disponible para este producto.");
-            return;
-        }
+        carrito[id].cantidad += 1;
     } else {
         carrito[id] = { 
             nombre: producto.nombre, 
@@ -154,7 +152,9 @@ function agregarAlCarrito(event, id) {
             cantidad: 1 
         };
     }
+    
     actualizarUI();
+    renderizarProductos(); // Actualizar las tarjetas para mostrar el nuevo stock
 }
 
 function cambiarCantidad(event, id, delta) {
@@ -165,18 +165,26 @@ function cambiarCantidad(event, id, delta) {
     if (!carrito[id]) return;
 
     if (delta > 0) {
-        if (carrito[id].cantidad < producto.stock) {
+        // Incrementar cantidad en carrito (descontar stock)
+        if (producto.stock > 0) {
             carrito[id].cantidad += 1;
+            producto.stock -= 1;
         } else {
             mostrarAlerta("No hay más stock disponible para este producto.");
+            return;
         }
     } else {
+        // Reducir cantidad en carrito (devolver stock)
         carrito[id].cantidad -= 1;
+        producto.stock += 1;
+        
         if (carrito[id].cantidad <= 0) {
             delete carrito[id];
         }
     }
+    
     actualizarUI();
+    renderizarProductos(); // Actualizar las tarjetas
 }
 
 function actualizarUI() {
@@ -237,13 +245,6 @@ function enviarPedido(e) {
     for (const id in carrito) {
         const item = carrito[id];
         texto += `• *${item.cantidad}x* ${item.nombre} (${formatearPrecio(item.precio * item.cantidad)})\n`;
-        
-        // Simular descuento de stock en UI
-        const productoIndex = productos.findIndex(p => p.id == id);
-        if (productoIndex !== -1) {
-            productos[productoIndex].stock -= item.cantidad;
-        }
-        
         tieneProductos = true;
     }
 
