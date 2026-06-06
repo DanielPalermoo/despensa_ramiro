@@ -3,31 +3,42 @@ let carrito = {};
 
 // ID extraído directamente de la URL de tu Google Sheet
 const SHEET_ID = '1pabikD9-VrMhUNVG4RVsiv332zRUqqbTnlNnKhhGbXY'; 
-const URL_GOOGLE_SHEET = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json`;
 
-// Función principal para obtener los datos de la planilla
+// Función auxiliar para leer una hoja específica
+async function fetchHoja(nombreHoja, esDestacado) {
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${nombreHoja}`;
+    const respuesta = await fetch(url);
+    const texto = await respuesta.text();
+    
+    // Se limpia la envoltura de Google para obtener un JSON puro
+    const jsonString = texto.substring(47).slice(0, -2);
+    const datos = JSON.parse(jsonString);
+    
+    return datos.table.rows.map(fila => {
+        return {
+            id: fila.c[0] ? fila.c[0].v : null,
+            nombre: fila.c[1] ? fila.c[1].v : 'Sin nombre',
+            precio: fila.c[2] ? fila.c[2].v : 0,
+            stock: (fila.c[3] && fila.c[3].v !== null) ? parseInt(fila.c[3].v) : 10, 
+            img: fila.c[4] ? fila.c[4].v : '',
+            isDestacado: esDestacado // Bandera para saber cómo renderizarlo
+        };
+    }).filter(prod => prod.id !== null);
+}
+
+// Función principal para obtener los datos de ambas pestañas
 async function cargarProductos() {
     try {
-        const respuesta = await fetch(URL_GOOGLE_SHEET);
-        const texto = await respuesta.text();
+        // Pedimos ambas hojas al mismo tiempo para mayor velocidad
+        const [destacados, generales] = await Promise.all([
+            fetchHoja('productos_dest', true),
+            fetchHoja('productos_gral', false)
+        ]);
         
-        // Se limpia la envoltura de Google para obtener un JSON puro
-        const jsonString = texto.substring(47).slice(0, -2);
-        const datos = JSON.parse(jsonString);
+        // Unimos todos los productos en un solo array. 
+        // ¡Esto mantiene tu lógica de carrito funcionando a la perfección!
+        productos = [...destacados, ...generales];
         
-        // Mapeo de las filas al formato de objeto necesario para el carrito
-        // Asumimos: col 0=ID, col 1=Nombre, col 2=Precio, col 3=IMG, col 4=Stock (opcional)
-        productos = datos.table.rows.map(fila => {
-            return {
-                id: fila.c[0] ? fila.c[0].v : null,
-                nombre: fila.c[1] ? fila.c[1].v : 'Sin nombre',
-                precio: fila.c[2] ? fila.c[2].v : 0,
-                stock: (fila.c[3] && fila.c[3].v !== null) ? parseInt(fila.c[3].v) : 10, 
-     
-                img: fila.c[4] ? fila.c[4].v : '' 
-            };
-        }).filter(prod => prod.id !== null);
-
         renderizarProductos();
     } catch (error) {
         console.error("Error al cargar el stock de Despensa Ramiro:", error);
@@ -39,35 +50,68 @@ const formatearPrecio = (precio) => {
     return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(precio);
 };
 
-// Renderizar las tarjetas de productos dinámicamente con Bootstrap
+// Renderizar las tarjetas de productos dinámicamente
 function renderizarProductos() {
-    const contenedor = document.getElementById('contenedor-productos');
-    contenedor.innerHTML = ''; 
+    const contenedorGral = document.getElementById('contenedor-productos');
+    const contenedorDest = document.getElementById('contenedor-destacados');
+    
+    contenedorGral.innerHTML = ''; 
+    if (contenedorDest) contenedorDest.innerHTML = '';
     
     productos.forEach(prod => {
         const agotado = prod.stock <= 0;
         const card = document.createElement('div');
-        card.className = 'col-6 col-md-4 col-lg-3';
-        card.innerHTML = `
-            <div class="card h-100 shadow-sm border-0 position-relative">
-                <img src="${prod.img}" alt="${prod.nombre}" class="card-img-top p-2 rounded" style="height: 140px; object-fit: cover; background:#f8f9fa;">
-                <div class="card-body p-2 d-flex flex-column">
-                    <h6 class="card-title fw-bold mb-1 fw-bold" style="font-size: 0.9rem;">${prod.nombre}</h6>
-                    <p class="text-success fw-bold mb-2">${formatearPrecio(prod.precio)}</p>
-                    <div class="mt-auto">
-                        <small class="d-block mb-2 ${prod.stock < 5 ? 'text-danger fw-bold' : 'text-muted'} " style="font-size: 0.75rem;">
-                            ${agotado ? '<i class="bi bi-exclamation-triangle"></i> Sin Stock' : `Stock: ${prod.stock} disp.`}
-                        </small>
-                        <button class="btn btn-primary btn-sm w-100 fw-bold" 
-                            onclick="agregarAlCarrito(event, ${prod.id})" 
-                            ${agotado ? 'disabled' : ''}>
-                            ${agotado ? 'Agotado' : '<i class="bi bi-plus-lg"></i> Agregar'}
-                        </button>
+        
+        if (prod.isDestacado) {
+            // ESTILOS PARA PRODUCTOS DESTACADOS (Más grandes y llamativos)
+            card.className = 'col-12 col-md-4'; // 3 por fila en desktop, ocupan todo el ancho en mobile
+            card.innerHTML = `
+                <div class="card h-100 shadow border-warning border-2 position-relative">
+                    <span class="position-absolute top-0 start-50 translate-middle badge rounded-pill bg-warning text-dark border border-white px-3 py-2 shadow-sm">
+                        <i class="bi bi-star-fill"></i> ¡Oferta Semanal!
+                    </span>
+                    <img src="${prod.img}" alt="${prod.nombre}" class="card-img-top p-2 rounded mt-2" style="height: 220px; object-fit: cover; background:#f8f9fa;">
+                    <div class="card-body p-3 d-flex flex-column text-center">
+                        <h4 class="card-title fw-bold mb-1 text-dark">${prod.nombre}</h4>
+                        <p class="text-success fw-bold fs-3 mb-2">${formatearPrecio(prod.precio)}</p>
+                        <div class="mt-auto">
+                            <small class="d-block mb-3 ${prod.stock < 5 ? 'text-danger fw-bold' : 'text-muted'}">
+                                ${agotado ? '<i class="bi bi-exclamation-triangle"></i> Agotado por ahora' : `Stock disponible: ${prod.stock}`}
+                            </small>
+                            <button class="btn btn-warning btn-lg w-100 fw-bold shadow-sm" 
+                                onclick="agregarAlCarrito(event, '${prod.id}')" 
+                                ${agotado ? 'disabled' : ''}>
+                                ${agotado ? 'Agotado' : '<i class="bi bi-cart-plus fs-5"></i> Lo Quiero'}
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </div>
-        `;
-        contenedor.appendChild(card);
+            `;
+            if (contenedorDest) contenedorDest.appendChild(card);
+        } else {
+            // ESTILOS PARA CATÁLOGO GENERAL (Tu diseño original conservado)
+            card.className = 'col-6 col-md-4 col-lg-3';
+            card.innerHTML = `
+                <div class="card h-100 shadow-sm border-0 position-relative">
+                    <img src="${prod.img}" alt="${prod.nombre}" class="card-img-top p-2 rounded" style="height: 140px; object-fit: cover; background:#f8f9fa;">
+                    <div class="card-body p-2 d-flex flex-column">
+                        <h6 class="card-title fw-bold mb-1" style="font-size: 0.9rem;">${prod.nombre}</h6>
+                        <p class="text-success fw-bold mb-2">${formatearPrecio(prod.precio)}</p>
+                        <div class="mt-auto">
+                            <small class="d-block mb-2 ${prod.stock < 5 ? 'text-danger fw-bold' : 'text-muted'} " style="font-size: 0.75rem;">
+                                ${agotado ? '<i class="bi bi-exclamation-triangle"></i> Sin Stock' : `Stock: ${prod.stock} disp.`}
+                            </small>
+                            <button class="btn btn-primary btn-sm w-100 fw-bold" 
+                                onclick="agregarAlCarrito(event, '${prod.id}')" 
+                                ${agotado ? 'disabled' : ''}>
+                                ${agotado ? 'Agotado' : '<i class="bi bi-plus-lg"></i> Agregar'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            contenedorGral.appendChild(card);
+        }
     });
 }
 
@@ -83,11 +127,10 @@ function pausarBoton(btn) {
     if (!btn) return;
     btn.disabled = true;
     setTimeout(() => {
-        // Solo rehabilitar si no es un botón de "Agotado" (basado en el texto o contexto)
         if (!btn.innerText.includes('Agotado')) {
             btn.disabled = false;
         }
-    }, 400); // Pausa de 400ms
+    }, 400); 
 }
 
 function agregarAlCarrito(event, id) {
@@ -159,9 +202,9 @@ function actualizarUI() {
                 <div class="text-muted small">${formatearPrecio(item.precio * item.cantidad)}</div>
             </div>
             <div class="d-flex align-items-center gap-2">
-                <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="cambiarCantidad(event, ${id}, -1)">-</button>
+                <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="cambiarCantidad(event, '${id}', -1)">-</button>
                 <span class="fw-bold mx-1">${item.cantidad}</span>
-                <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="cambiarCantidad(event, ${id}, 1)">+</button>
+                <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="cambiarCantidad(event, '${id}', 1)">+</button>
             </div>
         `;
         itemsContenedor.appendChild(div);
@@ -195,7 +238,7 @@ function enviarPedido(e) {
         const item = carrito[id];
         texto += `• *${item.cantidad}x* ${item.nombre} (${formatearPrecio(item.precio * item.cantidad)})\n`;
         
-        // Simular descuento de stock
+        // Simular descuento de stock en UI
         const productoIndex = productos.findIndex(p => p.id == id);
         if (productoIndex !== -1) {
             productos[productoIndex].stock -= item.cantidad;
@@ -217,7 +260,7 @@ function enviarPedido(e) {
 
     carrito = {};
     actualizarUI();
-    renderizarProductos();
+    renderizarProductos(); 
     
     // Cerrar modal
     const modalElement = document.getElementById('cartModal');
