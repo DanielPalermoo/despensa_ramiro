@@ -252,7 +252,6 @@ function enviarPedido(e) {
     texto += `\n*Total Estimado: ${document.getElementById('total-precio-modal').innerText}*`;
     texto += `\n\n_Por favor, confirmen mi pedido y coordinamos el retiro/envío._`;
     
-    // Nro de Ramiro
     const numeroTelefono = "5493884340480"; 
     const urlWhatsapp = `https://wa.me/${numeroTelefono}?text=${encodeURIComponent(texto)}`;
     
@@ -262,11 +261,10 @@ function enviarPedido(e) {
     actualizarUI();
     renderizarProductos(); 
     
-    // Cerrar modal
+    
     const modalElement = document.getElementById('cartModal');
     const modal = bootstrap.Modal.getInstance(modalElement);
     if (modal) modal.hide();
 }
 
-// Iniciar carga
 cargarProductos();
