@@ -2,6 +2,7 @@ let productos = [];
 let productosFiltrados = [];
 let productosDestacadosFiltrados = []; // Nueva variable para destacados filtrados
 let carrito = {};
+let cantidadesPrevias = {}; // Almacena la cantidad seleccionada en la tarjeta antes de agregar
 
 // Configuración de Paginación
 let paginaActual = 1;
@@ -27,7 +28,7 @@ async function fetchHoja(nombreHoja, esDestacado) {
         
         // Estructura unificada (6 columnas: ID, Nombre, Precio, Stock, Categoria, IMG)
         return {
-            id: fila.c[0] ? fila.c[0].v : null,
+            id: fila.c[0] ? String(fila.c[0].v).trim() : null, // Convertimos a texto y limpiamos espacios
             nombre: fila.c[1] ? fila.c[1].v : 'Sin nombre',
             precio: fila.c[2] ? fila.c[2].v : 0,
             stock: (fila.c[3] && fila.c[3].v !== null) ? parseInt(fila.c[3].v) : 10, 
@@ -35,7 +36,7 @@ async function fetchHoja(nombreHoja, esDestacado) {
             img: (fila.c[5] && fila.c[5].v) ? fila.c[5].v : '',              
             isDestacado: esDestacado 
         };
-    }).filter(prod => prod.id !== null);
+    }).filter(prod => prod.id !== null && prod.id !== "null" && prod.id !== "");
 }
 
 // Función principal para obtener los datos de ambas pestañas
@@ -153,6 +154,7 @@ function renderizarProductos() {
 function crearTarjetaProducto(prod) {
     const agotado = prod.stock <= 0;
     const card = document.createElement('div');
+    const cantPrevia = cantidadesPrevias[prod.id] || 1;
     
     // Función para asignar colores según la categoría
     const obtenerColorCategoria = (cat) => {
@@ -201,6 +203,16 @@ function crearTarjetaProducto(prod) {
                             ${agotado ? 'disabled' : ''}>
                             ${agotado ? 'Agotado' : '<i class="bi bi-cart-plus fs-5"></i> Lo Quiero'}
                         </button>
+                        <!-- Selector de cantidad para destacados -->
+                        <div class="d-flex align-items-center justify-content-center gap-3 mt-3 bg-light p-2 rounded-pill mx-auto" style="max-width: 140px; border: 1px solid #ffc107;">
+                            <button class="btn btn-sm btn-link text-dark p-0" onclick="ajustarCantidadPrevia(event, '${prod.id}', -1)" ${agotado ? 'disabled' : ''}>
+                                <i class="bi bi-dash-circle fs-4"></i>
+                            </button>
+                            <span class="fw-bold fs-5" style="min-width: 25px;" id="cant-previa-${prod.id}">${cantPrevia}</span>
+                            <button class="btn btn-sm btn-link text-dark p-0" onclick="ajustarCantidadPrevia(event, '${prod.id}', 1)" ${agotado ? 'disabled' : ''}>
+                                <i class="bi bi-plus-circle fs-4"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -225,6 +237,16 @@ function crearTarjetaProducto(prod) {
                             ${agotado ? 'disabled' : ''}>
                             ${agotado ? 'Agotado' : '<i class="bi bi-plus-lg"></i> Agregar'}
                         </button>
+                        <!-- Selector de cantidad para catálogo general -->
+                        <div class="d-flex align-items-center justify-content-center gap-2 mt-2 bg-light p-1 rounded-pill" style="border: 1px solid #0d6efd;">
+                            <button class="btn btn-sm btn-link text-dark p-0" onclick="ajustarCantidadPrevia(event, '${prod.id}', -1)" ${agotado ? 'disabled' : ''}>
+                                <i class="bi bi-dash-circle fs-5"></i>
+                            </button>
+                            <span class="fw-bold" style="min-width: 20px; font-size: 0.9rem;" id="cant-previa-${prod.id}">${cantPrevia}</span>
+                            <button class="btn btn-sm btn-link text-dark p-0" onclick="ajustarCantidadPrevia(event, '${prod.id}', 1)" ${agotado ? 'disabled' : ''}>
+                                <i class="bi bi-plus-circle fs-5"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -314,21 +336,62 @@ function agregarAlCarrito(event, id) {
     const producto = productos.find(p => p.id == id);
     if (!producto || producto.stock <= 0) return;
 
+    // Obtenemos la cantidad que el usuario seleccionó en la tarjeta
+    const cantidadSeleccionada = cantidadesPrevias[id] || 1;
+
+    if (producto.stock < cantidadSeleccionada) {
+        mostrarAlerta(`Lo sentimos, solo quedan ${producto.stock} unidades de este producto.`);
+        // Si hay stock pero menos de lo pedido, ajustamos a lo máximo posible
+        cantidadesPrevias[id] = producto.stock;
+        const spanCantidad = document.getElementById(`cant-previa-${id}`);
+        if(spanCantidad) spanCantidad.innerText = producto.stock;
+        return;
+    }
+
     // Descontar stock inmediatamente
-    producto.stock -= 1;
+    producto.stock -= cantidadSeleccionada;
 
     if (carrito[id]) {
-        carrito[id].cantidad += 1;
+        carrito[id].cantidad += cantidadSeleccionada;
     } else {
         carrito[id] = { 
             nombre: producto.nombre, 
             precio: producto.precio, 
-            cantidad: 1 
+            cantidad: cantidadSeleccionada 
         };
     }
     
+    // Resetear cantidad en la tarjeta después de agregar
+    cantidadesPrevias[id] = 1;
+    
     actualizarUI();
     renderizarProductos(); // Actualizar las tarjetas para mostrar el nuevo stock
+}
+
+function ajustarCantidadPrevia(event, id, delta) {
+    if (event) event.stopPropagation();
+    
+    const producto = productos.find(p => p.id == id);
+    if (!producto) return;
+
+    if (!cantidadesPrevias[id]) cantidadesPrevias[id] = 1;
+    
+    let nuevaCantidad = cantidadesPrevias[id] + delta;
+
+    // Validaciones
+    if (nuevaCantidad < 1) nuevaCantidad = 1;
+    if (nuevaCantidad > producto.stock) {
+        mostrarAlerta("No puedes agregar más del stock disponible.");
+        nuevaCantidad = producto.stock;
+    }
+
+    cantidadesPrevias[id] = nuevaCantidad;
+    
+    // Actualizar solo el número en el DOM para no re-renderizar todo
+    const spanCantidad = document.getElementById(`cant-previa-${id}`);
+    if (spanCantidad) {
+        spanCantidad.innerText = nuevaCantidad;
+    }
 }
 
 function cambiarCantidad(event, id, delta) {

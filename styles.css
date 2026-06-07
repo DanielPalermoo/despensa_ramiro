@@ -290,6 +290,16 @@ h3 {
     transform: scale(1.1);
 }
 
+/* Botones de cantidad en las tarjetas */
+.btn-link:focus {
+    box-shadow: none !important;
+}
+
+.btn-link:hover {
+    transform: scale(1.2);
+    transition: transform 0.2s;
+}
+
 /* Paginación */
 .pagination {
     margin-top: 2rem;
