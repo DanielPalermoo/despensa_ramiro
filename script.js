@@ -1,5 +1,11 @@
 let productos = [];
+let productosFiltrados = [];
+let productosDestacadosFiltrados = []; // Nueva variable para destacados filtrados
 let carrito = {};
+
+// Configuración de Paginación
+let paginaActual = 1;
+const productosPorPagina = 8; // Puedes ajustar este número
 
 // ID extraído directamente de la URL de tu Google Sheet
 const SHEET_ID = '1pabikD9-VrMhUNVG4RVsiv332zRUqqbTnlNnKhhGbXY'; 
@@ -14,14 +20,20 @@ async function fetchHoja(nombreHoja, esDestacado) {
     const jsonString = texto.substring(47).slice(0, -2);
     const datos = JSON.parse(jsonString);
     
+    if (!datos.table || !datos.table.rows) return [];
+
     return datos.table.rows.map(fila => {
+        if (!fila || !fila.c) return { id: null };
+        
+        // Estructura unificada (6 columnas: ID, Nombre, Precio, Stock, Categoria, IMG)
         return {
             id: fila.c[0] ? fila.c[0].v : null,
             nombre: fila.c[1] ? fila.c[1].v : 'Sin nombre',
             precio: fila.c[2] ? fila.c[2].v : 0,
             stock: (fila.c[3] && fila.c[3].v !== null) ? parseInt(fila.c[3].v) : 10, 
-            img: fila.c[4] ? fila.c[4].v : '',
-            isDestacado: esDestacado // Bandera para saber cómo renderizarlo
+            categoria: (fila.c[4] && fila.c[4].v) ? fila.c[4].v : 'General', 
+            img: (fila.c[5] && fila.c[5].v) ? fila.c[5].v : '',              
+            isDestacado: esDestacado 
         };
     }).filter(prod => prod.id !== null);
 }
@@ -29,21 +41,67 @@ async function fetchHoja(nombreHoja, esDestacado) {
 // Función principal para obtener los datos de ambas pestañas
 async function cargarProductos() {
     try {
+        console.log("Cargando productos...");
         // Pedimos ambas hojas al mismo tiempo para mayor velocidad
         const [destacados, generales] = await Promise.all([
             fetchHoja('productos_dest', true),
             fetchHoja('productos_gral', false)
         ]);
         
+        console.log("Productos cargados:", { destacados, generales });
+        
         // Unimos todos los productos en un solo array. 
-        // ¡Esto mantiene tu lógica de carrito funcionando a la perfección!
         productos = [...destacados, ...generales];
         
-        renderizarProductos();
+        // Poblamos las categorías ANTES del filtrado inicial
+        poblarCategorias();
+        
+        // Inicialmente filtramos ambos para mostrar todo
+        filtrarProductos(); 
     } catch (error) {
-        console.error("Error al cargar el stock de Despensa Ramiro:", error);
-        document.getElementById('contenedor-productos').innerHTML = '<div class="col-12 text-center p-5"><p class="text-danger">Error al cargar el catálogo de productos.</p></div>';
+        console.error("Error detallado al cargar el stock:", error);
+        document.getElementById('contenedor-productos').innerHTML = `
+            <div class="col-12 text-center p-5">
+                <p class="text-danger">Error al cargar el catálogo de productos.</p>
+                <small class="text-muted">${error.message}</small>
+            </div>`;
     }
+}
+
+// --- LÓGICA DE CATEGORÍAS Y FILTRADO ---
+
+function poblarCategorias() {
+    const selector = document.getElementById('select-categoria');
+    if (!selector) return;
+    
+    // Obtenemos categorías de TODOS los productos (destacados y generales)
+    const categoriasUnicas = [...new Set(productos.map(p => p.categoria))];
+    
+    selector.innerHTML = '<option value="todas">Todas las categorías</option>';
+    categoriasUnicas.forEach(cat => {
+        if (cat) {
+            selector.innerHTML += `<option value="${cat}">${cat}</option>`;
+        }
+    });
+}
+
+function filtrarProductos() {
+    const texto = document.getElementById('input-busqueda').value.toLowerCase().trim();
+    const catSeleccionada = document.getElementById('select-categoria').value;
+    
+    // Filtramos TODOS los productos según la búsqueda y categoría
+    const baseFiltrada = productos.filter(p => {
+        const coincideTexto = p.nombre.toLowerCase().includes(texto);
+        const coincideCat = (catSeleccionada === 'todas' || p.categoria === catSeleccionada);
+        return coincideTexto && coincideCat;
+    });
+
+    // Separamos el resultado en destacados y generales para mantener el orden visual
+    productosDestacadosFiltrados = baseFiltrada.filter(p => p.isDestacado);
+    productosFiltrados = baseFiltrada.filter(p => !p.isDestacado);
+    
+    paginaActual = 1;
+    renderizarProductos();
 }
 
 const formatearPrecio = (precio) => {
@@ -54,65 +112,181 @@ const formatearPrecio = (precio) => {
 function renderizarProductos() {
     const contenedorGral = document.getElementById('contenedor-productos');
     const contenedorDest = document.getElementById('contenedor-destacados');
+    const tituloDest = document.querySelector('h2.m-0.border-start.border-warning'); // Título de destacados
     
-    contenedorGral.innerHTML = ''; 
-    if (contenedorDest) contenedorDest.innerHTML = '';
-    
-    productos.forEach(prod => {
-        const agotado = prod.stock <= 0;
-        const card = document.createElement('div');
-        
-        if (prod.isDestacado) {
-            // ESTILOS PARA PRODUCTOS DESTACADOS (Más grandes y llamativos)
-            card.className = 'col-12 col-md-4'; // 3 por fila en desktop, ocupan todo el ancho en mobile
-            card.innerHTML = `
-                <div class="card h-100 shadow border-warning border-2 position-relative">
-                    <span class="position-absolute top-0 start-50 translate-middle badge rounded-pill bg-warning text-dark border border-white px-3 py-2 shadow-sm">
-                        <i class="bi bi-star-fill"></i> ¡Oferta Semanal!
-                    </span>
-                    <img src="${prod.img}" alt="${prod.nombre}" class="card-img-top p-2 rounded mt-2" style="height: 220px; object-fit: cover; background:#f8f9fa;">
-                    <div class="card-body p-3 d-flex flex-column text-center">
-                        <h4 class="card-title fw-bold mb-1 text-dark">${prod.nombre}</h4>
-                        <p class="text-success fw-bold fs-3 mb-2">${formatearPrecio(prod.precio)}</p>
-                        <div class="mt-auto">
-                            <small class="d-block mb-3 ${prod.stock < 5 ? 'text-danger fw-bold' : 'text-muted'}">
-                                ${agotado ? '<i class="bi bi-exclamation-triangle"></i> Agotado por ahora' : `Stock disponible: ${prod.stock}`}
-                            </small>
-                            <button class="btn btn-warning btn-lg w-100 fw-bold shadow-sm" 
-                                onclick="agregarAlCarrito(event, '${prod.id}')" 
-                                ${agotado ? 'disabled' : ''}>
-                                ${agotado ? 'Agotado' : '<i class="bi bi-cart-plus fs-5"></i> Lo Quiero'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-            if (contenedorDest) contenedorDest.appendChild(card);
+    // Renderizado de Destacados
+    if (contenedorDest) {
+        contenedorDest.innerHTML = '';
+        if (productosDestacadosFiltrados.length === 0) {
+            // Si no hay destacados que coincidan, ocultamos el título y el contenedor
+            if (tituloDest) tituloDest.parentElement.style.display = 'none';
+            contenedorDest.style.display = 'none';
         } else {
-            // ESTILOS PARA CATÁLOGO GENERAL (Tu diseño original conservado)
-            card.className = 'col-6 col-md-4 col-lg-3';
-            card.innerHTML = `
-                <div class="card h-100 shadow-sm border-0 position-relative">
-                    <img src="${prod.img}" alt="${prod.nombre}" class="card-img-top p-2 rounded" style="height: 140px; object-fit: cover; background:#f8f9fa;">
-                    <div class="card-body p-2 d-flex flex-column">
-                        <h6 class="card-title fw-bold mb-1" style="font-size: 0.9rem;">${prod.nombre}</h6>
-                        <p class="text-success fw-bold mb-2">${formatearPrecio(prod.precio)}</p>
-                        <div class="mt-auto">
-                            <small class="d-block mb-2 ${prod.stock < 5 ? 'text-danger fw-bold' : 'text-muted'} " style="font-size: 0.75rem;">
-                                ${agotado ? '<i class="bi bi-exclamation-triangle"></i> Sin Stock' : `Stock: ${prod.stock} disp.`}
-                            </small>
-                            <button class="btn btn-primary btn-sm w-100 fw-bold" 
-                                onclick="agregarAlCarrito(event, '${prod.id}')" 
-                                ${agotado ? 'disabled' : ''}>
-                                ${agotado ? 'Agotado' : '<i class="bi bi-plus-lg"></i> Agregar'}
-                            </button>
-                        </div>
+            if (tituloDest) tituloDest.parentElement.style.display = 'flex';
+            contenedorDest.style.display = 'flex';
+            productosDestacadosFiltrados.forEach(prod => {
+                const card = crearTarjetaProducto(prod);
+                contenedorDest.appendChild(card);
+            });
+        }
+    }
+
+    // Renderizado de Catálogo General con Paginación
+    contenedorGral.innerHTML = ''; 
+    
+    const inicio = (paginaActual - 1) * productosPorPagina;
+    const fin = inicio + productosPorPagina;
+    const productosPagina = productosFiltrados.slice(inicio, fin);
+
+    if (productosPagina.length === 0 && productosDestacadosFiltrados.length === 0) {
+        contenedorGral.innerHTML = '<div class="col-12 text-center p-4 text-muted"><p>No se encontraron productos que coincidan con tu búsqueda.</p></div>';
+    } else {
+        productosPagina.forEach(prod => {
+            const card = crearTarjetaProducto(prod);
+            contenedorGral.appendChild(card);
+        });
+    }
+
+    renderizarPaginacion();
+}
+
+function crearTarjetaProducto(prod) {
+    const agotado = prod.stock <= 0;
+    const card = document.createElement('div');
+    
+    // Función para asignar colores según la categoría
+    const obtenerColorCategoria = (cat) => {
+        const colores = {
+            'Bebidas': '#0d6efd',    // Azul
+            'Almacén': '#fd7e14',    // Naranja
+            'Lácteos': '#0dcaf0',    // Celeste
+            'Fiambrería': '#dc3545', // Rojo
+            'Infusiones': '#198754', // Verde
+            'Panadería': '#ffc107',  // Amarillo/Dorado
+            'Kiosco': '#6f42c1',     // Púrpura
+            'Destacado': '#212529'   // Negro/Gris oscuro
+        };
+        return colores[cat] || '#6c757d'; // Gris por defecto
+    };
+
+    const colorBadge = obtenerColorCategoria(prod.categoria);
+    const textoColor = (prod.categoria === 'Panadería') ? '#000' : '#fff'; // Texto negro en panadería para mejor contraste
+
+    const badgeCategoria = `
+        <span class="badge rounded-pill ms-1" style="font-size: 0.65rem; font-weight: bold; vertical-align: middle; background-color: ${colorBadge} !important; color: ${textoColor};">
+            ${prod.categoria}
+        </span>
+    `;
+
+    if (prod.isDestacado) {
+        card.className = 'col-12 col-md-4'; 
+        card.innerHTML = `
+            <div class="card h-100 shadow border-warning border-2 position-relative">
+                <span class="position-absolute top-0 start-50 translate-middle badge rounded-pill bg-warning text-dark border border-white px-3 py-2 shadow-sm">
+                    <i class="bi bi-star-fill"></i> ¡Oferta Semanal!
+                </span>
+                <img src="${prod.img}" alt="${prod.nombre}" class="card-img-top p-2 rounded mt-2" style="height: 220px; object-fit: cover; background:#f8f9fa;">
+                <div class="card-body p-3 d-flex flex-column text-center">
+                    <h4 class="card-title fw-bold mb-1 text-dark">
+                        ${prod.nombre}
+                        ${badgeCategoria}
+                    </h4>
+                    <p class="text-success fw-bold fs-3 mb-2">${formatearPrecio(prod.precio)}</p>
+                    <div class="mt-auto">
+                        <small class="d-block mb-3 ${prod.stock < 5 ? 'text-danger fw-bold' : 'text-muted'}">
+                            ${agotado ? '<i class="bi bi-exclamation-triangle"></i> Agotado por ahora' : `Stock disponible: ${prod.stock}`}
+                        </small>
+                        <button class="btn btn-warning btn-lg w-100 fw-bold shadow-sm" 
+                            onclick="agregarAlCarrito(event, '${prod.id}')" 
+                            ${agotado ? 'disabled' : ''}>
+                            ${agotado ? 'Agotado' : '<i class="bi bi-cart-plus fs-5"></i> Lo Quiero'}
+                        </button>
                     </div>
                 </div>
-            `;
-            contenedorGral.appendChild(card);
-        }
-    });
+            </div>
+        `;
+    } else {
+        card.className = 'col-6 col-md-4 col-lg-3';
+        card.innerHTML = `
+            <div class="card h-100 shadow-sm border-0 position-relative">
+                <img src="${prod.img}" alt="${prod.nombre}" class="card-img-top p-2 rounded" style="height: 140px; object-fit: cover; background:#f8f9fa;">
+                <div class="card-body p-2 d-flex flex-column">
+                    <h6 class="card-title fw-bold mb-1" style="font-size: 0.9rem;">
+                        ${prod.nombre}
+                        ${badgeCategoria}
+                    </h6>
+                    <p class="text-success fw-bold mb-2">${formatearPrecio(prod.precio)}</p>
+                    <div class="mt-auto">
+                        <small class="d-block mb-2 ${prod.stock < 5 ? 'text-danger fw-bold' : 'text-muted'} " style="font-size: 0.75rem;">
+                            ${agotado ? '<i class="bi bi-exclamation-triangle"></i> Sin Stock' : `Stock: ${prod.stock} disp.`}
+                        </small>
+                        <button class="btn btn-primary btn-sm w-100 fw-bold" 
+                            onclick="agregarAlCarrito(event, '${prod.id}')" 
+                            ${agotado ? 'disabled' : ''}>
+                            ${agotado ? 'Agotado' : '<i class="bi bi-plus-lg"></i> Agregar'}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    return card;
+}
+
+function renderizarPaginacion() {
+    const contenedor = document.getElementById('paginacion-container');
+    if (!contenedor) return;
+
+    const totalPaginas = Math.ceil(productosFiltrados.length / productosPorPagina);
+    
+    if (totalPaginas <= 1) {
+        contenedor.innerHTML = '';
+        return;
+    }
+
+    let html = `
+        <nav aria-label="Navegación de productos">
+            <ul class="pagination pagination-sm m-0">
+                <li class="page-item ${paginaActual === 1 ? 'disabled' : ''}">
+                    <a class="page-link" onclick="cambiarPagina(${paginaActual - 1})" aria-label="Anterior">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
+                </li>
+    `;
+
+    for (let i = 1; i <= totalPaginas; i++) {
+        html += `
+            <li class="page-item ${paginaActual === i ? 'active' : ''}">
+                <a class="page-link" onclick="cambiarPagina(${i})">${i}</a>
+            </li>
+        `;
+    }
+
+    html += `
+                <li class="page-item ${paginaActual === totalPaginas ? 'disabled' : ''}">
+                    <a class="page-link" onclick="cambiarPagina(${paginaActual + 1})" aria-label="Siguiente">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    `;
+
+    contenedor.innerHTML = html;
+}
+
+function cambiarPagina(nuevaPagina) {
+    const totalPaginas = Math.ceil(productosFiltrados.length / productosPorPagina);
+    if (nuevaPagina < 1 || nuevaPagina > totalPaginas) return;
+    
+    paginaActual = nuevaPagina;
+    renderizarProductos();
+    
+    // Scroll suave hasta el catálogo
+    const catalogo = document.getElementById('contenedor-productos');
+    if (catalogo) {
+        catalogo.scrollIntoView({ behavior: 'smooth' });
+    }
 }
 
 // Función para mostrar alertas personalizadas usando el modal de Bootstrap
@@ -194,6 +368,7 @@ function actualizarUI() {
     const modalVacio = document.getElementById('carrito-vacio');
     const modalLista = document.getElementById('lista-carrito');
     const badge = document.getElementById('cart-badge');
+    const badgeFlotante = document.getElementById('cart-badge-flotante');
     
     itemsContenedor.innerHTML = '';
 
@@ -225,16 +400,38 @@ function actualizarUI() {
     if (itemsTotales > 0) {
         badge.innerText = itemsTotales;
         badge.classList.remove('d-none');
+        badgeFlotante.innerText = itemsTotales;
+        badgeFlotante.classList.remove('d-none');
         modalVacio.classList.add('d-none');
         modalLista.classList.remove('d-none');
         document.getElementById('btn-finalizar-pedido').disabled = false;
     } else {
         badge.classList.add('d-none');
+        badgeFlotante.classList.add('d-none');
         modalVacio.classList.remove('d-none');
         modalLista.classList.add('d-none');
         document.getElementById('btn-finalizar-pedido').disabled = true;
     }
 }
+
+// Lógica para el botón flotante del carrito
+window.addEventListener('scroll', () => {
+    const btnFlotante = document.getElementById('btn-flotante-carrito');
+    const cartBadge = document.getElementById('cart-badge');
+    
+    if (!btnFlotante || !cartBadge) return;
+
+    // Obtener la posición del botón de carrito principal
+    const rect = cartBadge.getBoundingClientRect();
+    
+    // Si el botón principal (su badge) no es visible (scrolleado hacia arriba)
+    if (rect.bottom < 0) {
+        btnFlotante.classList.remove('d-none');
+        btnFlotante.classList.add('animate__animated', 'animate__fadeInRight');
+    } else {
+        btnFlotante.classList.add('d-none');
+    }
+});
 
 function enviarPedido(e) {
     if (e) e.preventDefault();

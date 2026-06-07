@@ -48,6 +48,28 @@
             <p class="text-muted mb-0">Elegí tus productos abajo, armá tu carrito y mandanos el pedido directo al celu.</p>
         </div>
 
+        <!-- Panel de Búsqueda y Filtro (Movido arriba de destacados) -->
+        <div class="card border-0 shadow-sm p-3 mb-4 bg-white">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+                <h4 class="m-0 fw-bold text-dark d-none d-md-block">
+                    <i class="bi bi-search me-2 text-primary"></i>¿Qué estás buscando?
+                </h4>
+                
+                <div class="d-flex gap-2 w-100 w-md-auto justify-content-center">
+                    <!-- Selector de Categorías -->
+                    <select id="select-categoria" class="form-select border shadow-sm" onchange="filtrarProductos()" style="max-width: 180px; font-size: 0.9rem;">
+                        <option value="todas">Todas las categorías</option>
+                    </select>
+                    
+                    <!-- Buscador -->
+                    <div class="input-group shadow-sm" style="max-width: 250px;">
+                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                        <input type="text" id="input-busqueda" class="form-control border-start-0 ps-0" placeholder="Ej: Coca, Pan..." oninput="filtrarProductos()" style="font-size: 0.9rem;">
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h2 class="m-0 border-start border-warning border-4 ps-2 fw-bold text-dark">
                 <i class="bi bi-star-fill text-warning"></i> Destacados de la Semana
@@ -63,14 +85,17 @@
         <div class="row g-4 mb-5" id="contenedor-destacados">
             </div>
 
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h3 class="m-0 border-start border-primary border-4 ps-2 fw-bold text-secondary">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">
+            <h3 class="m-0 border-start border-primary border-4 ps-2 fw-bold text-secondary mb-3 mb-md-0">
                 <i class="bi bi-box2-heart me-1"></i> Nuestro Catálogo
             </h3>
         </div>
         
         <div class="row g-3" id="contenedor-productos">
             </div>
+
+        <!-- Paginación -->
+        <div id="paginacion-container" class="d-flex justify-content-center mt-5 mb-3"></div>
 
     <!-- Footer -->
     <footer class="bg-white border-top py-3 mt-4">
@@ -151,6 +176,16 @@
             </button>
         </div>
     </div>
+
+    <!-- Botón flotante de carrito para desktop/mobile al hacer scroll -->
+    <button id="btn-flotante-carrito" class="btn btn-primary rounded-circle shadow-lg d-none" 
+            style="position: fixed; bottom: 90px; right: 20px; width: 60px; height: 60px; z-index: 1050;"
+            data-bs-toggle="modal" data-bs-target="#cartModal">
+        <i class="bi bi-cart3 fs-3"></i>
+        <span id="cart-badge-flotante" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none">
+            0
+        </span>
+    </button>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="script.js"></script>
